@@ -1,4 +1,32 @@
-Readme copied from https://github.com/tripflex/MOD-t/tree/master/scripts
+# Install
+``pip3 install -U git+https://github.com/dominikandreas/modtpy.git``
+
+# Usage
+```bash
+$ modtpy
+Usage: modtpy [OPTIONS] COMMAND [ARGS]...
+
+Options:
+  -l, --debug / --no-debug
+  --help                    Show this message and exit.
+
+Commands:
+  enter-dfu
+  flash-firmware
+  load-filament
+  send-gcode
+  status
+  unload-filament
+  
+$ modtpy send-gcode --help
+Usage: modtpy send-gcode [OPTIONS] GCODE_PATH
+
+Options:
+  --help  Show this message and exit.
+```
+
+
+Rest of Readme copied from https://github.com/tripflex/MOD-t/tree/master/scripts
 
 ## MOD-t Scripts
 Original source from https://github.com/Xaero252/Mod-T-Scripts
