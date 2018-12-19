@@ -165,10 +165,6 @@ class ModT:
         pbar.last_line = 0
 
         def print_progress(msg):
-            try:
-                msg = json.loads(msg)
-            except json.decoder.JSONDecodeError:
-                return
             status, job = msg.get("status", {}), msg.get("job", {})
             current_line_number = job.get("current_line_number")
             pbar.update(current_line_number - pbar.last_line)
