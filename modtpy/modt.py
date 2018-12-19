@@ -5,7 +5,7 @@ import usb.core
 import usb.util
 import tqdm
 from zlib import adler32
-
+from subprocess import getoutput
 
 # Adler32 checksum function
 # Based on https://gist.github.com/kofemann/2303046
@@ -183,3 +183,31 @@ class ModT:
         while True:
             print_progress(self.get_status(str_format=False))
             time.sleep(2)
+
+    def flash_firmware(self, firmware_path):
+        assert self.dev is not None
+
+        firmware_path = os.path.abspath(firmware_path)
+        assert os.path.isfile(firmware_path)
+        dfu_cmd = "dfu-util -d 2b75:0003 -a 0 -s 0x0:leave -D %s > /tmp/dfu &" % firmware_path
+        status_cmd = "tac /tmp/dfu | egrep -m 1 . | sed 's/.*[ \t][ \t]*\([0-9][0-9]*\)%.*/\1/'"
+
+        os.system(dfu_cmd)
+
+        # Loop until the firmware has been written
+        while True:
+            # Steal just the progress value from the file
+            progress = getoutput(status_cmd)
+            if "Transitioning" in progress:
+                # We won't always capture the 100% progress indication, so we force it
+                progress = 100
+                print(progress)
+                # exit the loop
+                break
+
+            print(progress)
+            # the dfu-util write is kinda slow, let's not waste too much cpu time
+            time.sleep(1)
+            # cleanup our temporary file
+            os.remove("/tmp/dfu")
+

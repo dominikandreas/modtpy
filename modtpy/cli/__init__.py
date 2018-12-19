@@ -1,4 +1,9 @@
-import click
+try:
+    import click
+except ImportError as e:
+    print("please install click: e.g. pip3 install -U click")
+    raise e
+
 import logging
 from modtpy.modt import ModT
 
@@ -44,5 +49,12 @@ def enter_dfu():
 def status():
     modt = ModT()
     logging.info(modt.get_status(str_format=True))
+
+
+@cli_root.command()
+@click.argument("firmware_path", type=click.Path(file_okay=True, dir_okay=False, readable=True))
+def flash_firmware(firmware_path):
+    modt = ModT()
+    modt.flash_firmware(firmware_path)
 
 
