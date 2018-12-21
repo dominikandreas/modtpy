@@ -7,7 +7,7 @@ except ImportError as e:
     raise e
 
 import logging
-from modtpy.modt import ModT, Mode
+from modtpy.api import ModT, Mode
 
 
 def _ensure_connected(callback_function, required_mode=None):
@@ -94,8 +94,8 @@ def status():
 
 
 @cli_root.command()
-@ensure_connected(Mode.dfu)
 @click.argument("firmware_path", type=click.Path(file_okay=True, dir_okay=False, readable=True))
+@ensure_connected(Mode.dfu)
 def flash_firmware(firmware_path, modt):
     modt.flash_firmware(firmware_path)
 
