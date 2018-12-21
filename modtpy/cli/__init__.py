@@ -7,7 +7,7 @@ except ImportError as e:
     raise e
 
 import logging
-from modtpy.modt import ModT
+from modtpy.api import ModT
 
 
 @click.group()
