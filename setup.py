@@ -49,6 +49,7 @@ setup(
         'Programming Language :: Python :: 3.6',
     ],
     keywords='home automation',
+    include_package_data=True,
     packages=['modtpy', 'modtpy.cli'],
     platforms=['linux', ],
     install_requires=[

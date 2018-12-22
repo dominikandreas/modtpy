@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import json
 import usb.core
@@ -7,13 +8,18 @@ import tqdm
 from zlib import adler32
 from subprocess import getoutput
 
-# Adler32 checksum function
-# Based on https://gist.github.com/kofemann/2303046
-# For some reason, mod-t uses 0, not 1 as the basis of the adler32 sum
 BLOCKSIZE = 256 * 1024 * 1024
+
+if os.name == 'nt':
+    is_64_bit = sys.maxsize > 2**32
+    libusb_path = os.path.abspath(os.path.dirname(__file__)+"/libusb/%s/dll/" % ("MS64" if is_64_bit else "MS32"))
+    # print("using %s" % libusb_path)
+    os.environ['PATH'] = os.environ['PATH'] + os.pathsep + libusb_path
 
 
 def adler32_checksum(fname):
+    # Adler32 checksum function based on https://gist.github.com/kofemann/2303046
+    # For some reason, mod-t uses 0, not 1 as the basis of the adler32 sum
     asum = 0
     f = open(fname, "rb")
     while True:
@@ -27,40 +33,127 @@ def adler32_checksum(fname):
     return asum
 
 
+STATUS_STRINGS = dict(STATE_LOADFIL_HEATING="Load filament: heating",
+                      STATE_LOADFIL_EXTRUDING="Load filament: extruding",
+                      STATE_REMFIL_HEATING="Unload filament: heating",
+                      STATE_REMFIL_RETRACTING="Unload filament: retracting",
+                      STATE_IDLE="Idle",
+                      STATE_FILE_RX="Receiving GCode",
+                      STATE_JOB_QUEUED="Job queued",
+                      STATE_JOB_PREP="Preparing Job",
+                      STATE_HOMING_XY="Calibrating X/Y axis",
+                      STATE_HOMING_Z_ROUGH="Calibrating Z axis rough",
+                      STATE_HOMING_Z_FINE="Calibrating Z axis fine",
+                      STATE_BUILDING="printing")
+
+
+class Mode:
+    dfu, operate, disconnected = 0, 1, 2
+
+
+def _ensure_connected(callback_function, required_mode=None):
+    def wrapper(self, *args, **kwargs):
+        i = 0
+        while not self.is_connected():
+            print("\rWaiting for Mod-T connection " + ("." * i), end=" ")
+            time.sleep(.5)
+            i = (i + 1) % 4
+        if required_mode is not None and self.mode != required_mode:
+            if self.mode == Mode.dfu:
+                print("printer is currently in dfu mode. you can put it back into operating mode by restarting it")
+                exit()
+            elif self.mode == Mode.operate:
+                self.enter_dfu()
+
+        return callback_function(self, *args, **kwargs)
+
+    return wrapper
+
+
+def ensure_connected(required_mode_or_function=None):
+
+    if callable(required_mode_or_function):
+        f = required_mode_or_function
+        return _ensure_connected(f)
+    else:
+        def __wrapper__(f):
+            return _ensure_connected(f, required_mode=required_mode_or_function)
+
+        return __wrapper__
+
+
 class ModT:
+    dev_id_operate = 0x0002
+    dev_id_dfu = 0x0003
+    dev_vendor_id = 0x2b75
+
     def __init__(self):
+        self._dev = None
+        self.dev_id = self.dev_id_operate
+
+    @property
+    def dev_id(self):
+        return self._dev_id
+
+    @dev_id.setter
+    def dev_id(self, value):
+        self._dev_id = value
         self._dev = None
 
     @property
     def dev(self):
         if self._dev is None:
-            self._dev = usb.core.find(idVendor=0x2b75, idProduct=0x0002)
-            self._dev.set_configuration()
-            if self._dev is None:
-                raise ValueError('No Mod-T detected')
+            self._dev = usb.core.find(idVendor=self.dev_vendor_id, idProduct=self.dev_id)
+            if self._dev is not None:
+                self._dev.set_configuration()
         return self._dev
 
+    @staticmethod
+    def is_connected():
+        return (usb.core.find(idVendor=ModT.dev_vendor_id, idProduct=ModT.dev_id_operate) or
+                usb.core.find(idVendor=ModT.dev_vendor_id, idProduct=ModT.dev_id_dfu))
+
+    @property
+    def mode(self):
+        if usb.core.find(idVendor=ModT.dev_vendor_id, idProduct=ModT.dev_id_operate):
+            return Mode.operate
+        elif usb.core.find(idVendor=ModT.dev_vendor_id, idProduct=ModT.dev_id_dfu):
+            return Mode.dfu
+        else:
+            return Mode.disconnected
+
+    @ensure_connected
     def enter_dfu(self, wait_for_dfu=True):
+        if self.mode is Mode.dfu:
+            return
+
+        self.dev_id = self.dev_id_operate
+
+        assert self.dev is not None, "No Mod-T connected"
+
         # Mimic the Mod-T desktop utility. First packet is not human readable. Second packet puts Mod-T into DFU mode
         self.dev.write(2, bytearray.fromhex('246a0095ff'))
         self.dev.write(2, '{"transport":{"attrs":["request","twoway"],"id":7},'
                           '"data":{"command":{"idx":53,"name":"Enter_dfu_mode"}}};')
 
-        self._dev = None
+        self.dev_id = self.dev_id_dfu
         # Wait for the Mod-T to reattach in DFU mode
         if wait_for_dfu:
             time.sleep(2)
 
+    @ensure_connected(Mode.operate)
     def load_filament(self):
         self.dev.write(2, bytearray.fromhex('24690096ff'))
         self.dev.write(2, '{"transport":{"attrs":["request","twoway"],"id":9},'
                           '"data":{"command":{"idx":52,"name":"load_initiate"}}};')
 
+    @ensure_connected(Mode.operate)
     def unload_filament(self):
         self.dev.write(2, bytearray.fromhex('246c0093ff'))
         self.dev.write(2, '{"transport":{"attrs":["request","twoway"],"id":11},'
                           '"data":{"command":{"idx":51,"name":"unload_initiate"}}};')
 
+    @ensure_connected(Mode.operate)
     def get_status(self, str_format=False):
         self.dev.write(4, '{"metadata":{"version":1,"type":"status"}}')
         msg = self.read_modt(0x83)
@@ -77,13 +170,18 @@ class ModT:
             return msg
 
         status, job = msg.get("status", {}), msg.get("job", {})
+        state = status.get("state")
+        for key, value in STATUS_STRINGS.items():
+            state = state.replace(key, value)
+
         return (" ".join(map(str,
-                             [status.get("state"), "extruder temp:", status.get("extruder_temperature"), "°C / ",
+                             ["State: "+state, "| extruder temp:", status.get("extruder_temperature"), "°C / ",
                               status.get("extruder_temperature"), "°C ",
                               "| Job: line number:", job.get("current_line_number")])))
 
-    # Read pending data from MOD-t (bulk reads of 64 bytes)
+    @ensure_connected(Mode.operate)
     def read_modt(self, ep):
+        # Read pending data from MOD-t (bulk reads of 64 bytes)
         try:
             text = ''.join(map(chr, self.dev.read(ep, 64)))
             fulltext = text
@@ -94,6 +192,7 @@ class ModT:
         except usb.core.USBError as e:
             return json.dumps(dict(error=str(e)))
 
+    @ensure_connected(Mode.operate)
     def send_gcode(self, gcode_path):
         if not os.path.isfile(gcode_path):
             raise RuntimeError(gcode_path + " not found")
@@ -177,12 +276,14 @@ class ModT:
 
         print("Gcode sent. executing loop and query mod-t status every 2 seconds")
         while True:
-            print_progress(self.get_status(str_format=False))
-            time.sleep(2)
+            try:
+                print_progress(self.get_status(str_format=False))
+                time.sleep(2)
+            except Exception as e:
+                print(e)
 
+    @ensure_connected(Mode.dfu)
     def flash_firmware(self, firmware_path):
-        assert self.dev is not None
-
         firmware_path = os.path.abspath(firmware_path)
         assert os.path.isfile(firmware_path)
         dfu_cmd = "dfu-util -d 2b75:0003 -a 0 -s 0x0:leave -D %s > /tmp/dfu &" % firmware_path
@@ -207,3 +308,9 @@ class ModT:
             # cleanup our temporary file
             os.remove("/tmp/dfu")
 
+
+if __name__ == "__main__":
+    modt = ModT()
+    while True:
+        print("\r" + modt.get_status(str_format=True), end="")
+        time.sleep(1)

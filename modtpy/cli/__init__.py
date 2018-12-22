@@ -1,3 +1,5 @@
+import time
+
 try:
     import click
 except ImportError as e:
@@ -27,16 +29,24 @@ def send_gcode(gcode_path):
     modt.send_gcode(gcode_path)
 
 
+def loop_print_status(modt):
+    while True:
+        logging.info(modt.get_status(str_format=True))
+        time.sleep(.5)
+
+
 @cli_root.command()
 def load_filament():
     modt = ModT()
     modt.load_filament()
+    loop_print_status(modt)
 
 
 @cli_root.command()
 def unload_filament():
     modt = ModT()
     modt.unload_filament()
+    loop_print_status(modt)
 
 
 @cli_root.command()
@@ -47,8 +57,7 @@ def enter_dfu():
 
 @cli_root.command()
 def status():
-    modt = ModT()
-    logging.info(modt.get_status(str_format=True))
+    loop_print_status(ModT())
 
 
 @cli_root.command()
@@ -58,3 +67,15 @@ def flash_firmware(firmware_path):
     modt.flash_firmware(firmware_path)
 
 
+@cli_root.command()
+@click.option('-g', '--group', default="sudo")
+@click.option('-m', '--mode', default="0664")
+def install_udev_rule(group, mode):
+    with open("/etc/udev/rules.d", "w") as f:
+        for dev_id in ("0002", "0003"):
+            f.write("""SUBSYSTEM=="usb", ATTR{idVendor}=="2b75", ATTR{idProduct}=="%s", GROUP="%s", MODE="%s"\n""" %
+                    (dev_id, group, mode))
+
+
+if __name__ == "__main__":
+    cli_root()
