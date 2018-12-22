@@ -71,7 +71,7 @@ def flash_firmware(firmware_path):
 @click.option('-g', '--group', default="sudo")
 @click.option('-m', '--mode', default="0664")
 def install_udev_rule(group, mode):
-    with open("/etc/udev/rules.d", "w") as f:
+    with open("/etc/udev/rules.d/51-modt.rules", "w") as f:
         for dev_id in ("0002", "0003"):
             f.write("""SUBSYSTEM=="usb", ATTR{idVendor}=="2b75", ATTR{idProduct}=="%s", GROUP="%s", MODE="%s"\n""" %
                     (dev_id, group, mode))
