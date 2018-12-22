@@ -54,7 +54,7 @@ setup(
     platforms=['linux', ],
     install_requires=[
         'pyusb',
-         # 'click',  # optional
+        'click',  # optional
         'tqdm',
     ],
     entry_points={
