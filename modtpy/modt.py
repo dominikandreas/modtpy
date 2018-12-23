@@ -11,8 +11,8 @@ from subprocess import getoutput
 BLOCKSIZE = 256 * 1024 * 1024
 
 if os.name == 'nt':
-    is_64_bit = sys.maxsize > 2**32
-    libusb_path = os.path.abspath(os.path.dirname(__file__)+"/libusb/%s/dll/" % ("MS64" if is_64_bit else "MS32"))
+    is_64_bit = sys.maxsize > 2 ** 32
+    libusb_path = os.path.abspath(os.path.dirname(__file__) + "/libusb/%s/dll/" % ("MS64" if is_64_bit else "MS32"))
     # print("using %s" % libusb_path)
     os.environ['PATH'] = os.environ['PATH'] + os.pathsep + libusb_path
 
@@ -42,9 +42,14 @@ STATUS_STRINGS = dict(STATE_LOADFIL_HEATING="Load filament: heating",
                       STATE_JOB_QUEUED="Job queued",
                       STATE_JOB_PREP="Preparing Job",
                       STATE_HOMING_XY="Calibrating X/Y axis",
+                      STATE_HOMING_HEATING="Heating up",
                       STATE_HOMING_Z_ROUGH="Calibrating Z axis rough",
                       STATE_HOMING_Z_FINE="Calibrating Z axis fine",
-                      STATE_BUILDING="printing")
+                      STATE_BUILDING="Printing",
+                      STATE_EXEC_PAUSE_CMD="Pausing",
+                      STATE_PAUSED="Paused",
+                      STATE_UNPAUSED="Resuming",
+                      STATE_MECH_READY="Print finished")
 
 
 class Mode:
@@ -53,11 +58,8 @@ class Mode:
 
 def _ensure_connected(callback_function, required_mode=None):
     def wrapper(self, *args, **kwargs):
-        i = 0
-        while not self.is_connected():
-            print("\rWaiting for Mod-T connection " + ("." * i), end=" ")
-            time.sleep(.5)
-            i = (i + 1) % 4
+        if not self.is_connected():
+            raise RuntimeError("Mod-T is not connected")
         if required_mode is not None and self.mode != required_mode:
             if self.mode == Mode.dfu:
                 print("printer is currently in dfu mode. you can put it back into operating mode by restarting it")
@@ -71,7 +73,6 @@ def _ensure_connected(callback_function, required_mode=None):
 
 
 def ensure_connected(required_mode_or_function=None):
-
     if callable(required_mode_or_function):
         f = required_mode_or_function
         return _ensure_connected(f)
@@ -164,7 +165,7 @@ class ModT:
             if str_format:
                 return msg
             else:
-                raise e
+                raise RuntimeError("Unable to decode printer message: %s: JSONDecodeError: %s" % (msg, e))
 
         if not str_format:
             return msg
@@ -175,8 +176,8 @@ class ModT:
             state = state.replace(key, value)
 
         return (" ".join(map(str,
-                             ["State: "+state, "| extruder temp:", status.get("extruder_temperature"), "°C / ",
-                              status.get("extruder_temperature"), "°C ",
+                             ["State: " + state, "| extruder temp:", status.get("extruder_temperature"), "°C / ",
+                              status.get("extruder_target_temperature"), "°C ",
                               "| Job: line number:", job.get("current_line_number")])))
 
     @ensure_connected(Mode.operate)
@@ -266,21 +267,28 @@ class ModT:
         def print_progress(msg):
             status, job = msg.get("status", {}), msg.get("job", {})
             current_line_number = job.get("current_line_number")
-            pbar.update(current_line_number - pbar.last_line)
+            if current_line_number is not None:
+                pbar.update(current_line_number - pbar.last_line)
+                pbar.last_line = current_line_number
+
+            state = status.get("state", "?")
+            for key, value in STATUS_STRINGS.items():
+                state = state.replace(key, value)
 
             pbar.set_description(
                 " ".join(map(str,
-                             [status.get("state"), "extruder temp:", status.get("extruder_temperature"), "°C / ",
-                              status.get("extruder_temperature"), "°C ",
-                              "| Job: line number:", job.get("current_line_number")])))
+                             ["State: " + state, "| extruder temp:", status.get("extruder_temperature", "?"), "°C / ",
+                              status.get("extruder_target_temperature", "?"), "°C ",
+                              "| Job: line number:", job.get("current_line_number", "?")])))
 
         print("Gcode sent. executing loop and query mod-t status every 2 seconds")
         while True:
             try:
                 print_progress(self.get_status(str_format=False))
                 time.sleep(2)
-            except Exception as e:
-                print(e)
+            except Exception:
+                import traceback
+                traceback.print_exc()
 
     @ensure_connected(Mode.dfu)
     def flash_firmware(self, firmware_path):
@@ -293,20 +301,22 @@ class ModT:
 
         # Loop until the firmware has been written
         while True:
-            # Steal just the progress value from the file
-            progress = getoutput(status_cmd)
-            if "Transitioning" in progress:
-                # We won't always capture the 100% progress indication, so we force it
-                progress = 100
-                print(progress)
-                # exit the loop
-                break
+            try:
+                # Steal just the progress value from the file
+                progress = getoutput(status_cmd)
+                if "Transitioning" in progress:
+                    # We won't always capture the 100% progress indication, so we force it
+                    progress = 100
+                    print(progress)
+                    # exit the loop
+                    break
 
-            print(progress)
-            # the dfu-util write is kinda slow, let's not waste too much cpu time
-            time.sleep(1)
-            # cleanup our temporary file
-            os.remove("/tmp/dfu")
+                print(progress)
+                # the dfu-util write is kinda slow, let's not waste too much cpu time
+                time.sleep(1)
+            finally:
+                # cleanup our temporary file
+                os.remove("/tmp/dfu")
 
 
 if __name__ == "__main__":

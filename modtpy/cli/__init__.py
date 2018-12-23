@@ -7,7 +7,39 @@ except ImportError as e:
     raise e
 
 import logging
-from modtpy.modt import ModT
+from modtpy.modt import ModT, Mode
+
+
+def _ensure_connected(callback_function, required_mode=None):
+    def wrapper(*args, **kwargs):
+        i = 0
+        modt = ModT()
+        while not modt.is_connected():
+            print("\rWaiting for Mod-T connection " + ("." * i), end=" ")
+            time.sleep(.5)
+            i = (i + 1) % 4
+        if required_mode is not None and modt.mode != required_mode:
+            if modt.mode == Mode.dfu:
+                print("printer is currently in dfu mode. you can put it back into operating mode by restarting it")
+                exit()
+            elif modt.mode == Mode.operate:
+                modt.enter_dfu()
+
+        return callback_function(*args, modt=modt, **kwargs)
+    wrapper.__name__ = callback_function.__name__
+
+    return wrapper
+
+
+def ensure_connected(required_mode_or_function=None):
+    if callable(required_mode_or_function):
+        f = required_mode_or_function
+        return _ensure_connected(f)
+    else:
+        def __wrapper__(f):
+            return _ensure_connected(f, required_mode=required_mode_or_function)
+
+        return __wrapper__
 
 
 @click.group()
@@ -24,8 +56,8 @@ def cli_root(debug):
 
 @cli_root.command()
 @click.argument("gcode_path", type=click.Path(file_okay=True, dir_okay=False, readable=True))
-def send_gcode(gcode_path):
-    modt = ModT()
+@ensure_connected(Mode.operate)
+def send_gcode(gcode_path, modt):
     modt.send_gcode(gcode_path)
 
 
@@ -36,34 +68,35 @@ def loop_print_status(modt):
 
 
 @cli_root.command()
-def load_filament():
-    modt = ModT()
+@ensure_connected(Mode.operate)
+def load_filament(modt):
     modt.load_filament()
     loop_print_status(modt)
 
 
 @cli_root.command()
-def unload_filament():
-    modt = ModT()
+@ensure_connected(Mode.operate)
+def unload_filament(modt):
     modt.unload_filament()
     loop_print_status(modt)
 
 
 @cli_root.command()
-def enter_dfu():
-    modt = ModT()
+@ensure_connected
+def enter_dfu(modt):
     modt.enter_dfu(wait_for_dfu=True)
 
 
 @cli_root.command()
+@ensure_connected(Mode.operate)
 def status():
     loop_print_status(ModT())
 
 
 @cli_root.command()
+@ensure_connected(Mode.dfu)
 @click.argument("firmware_path", type=click.Path(file_okay=True, dir_okay=False, readable=True))
-def flash_firmware(firmware_path):
-    modt = ModT()
+def flash_firmware(firmware_path, modt):
     modt.flash_firmware(firmware_path)
 
 
