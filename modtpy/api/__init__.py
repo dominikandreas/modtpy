@@ -103,16 +103,9 @@ class ModT:
     @property
     def dev(self):
         if self._dev is None:
-<<<<<<< HEAD
             self._dev = usb.core.find(idVendor=self.dev_vendor_id, idProduct=self.dev_id)
             if self._dev is not None:
                 self._dev.set_configuration()
-=======
-            self._dev = usb.core.find(idVendor=0x2b75, idProduct=0x0002)
-            if self._dev is None:
-                raise ValueError('No Mod-T detected')
-            self._dev.set_configuration()
->>>>>>> feat(WebServer): added initial test for a possible webserver
         return self._dev
 
     @staticmethod

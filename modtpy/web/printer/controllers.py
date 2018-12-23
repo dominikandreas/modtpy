@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, g
 from modtpy.web.errors import USBError
 import usb.core
+from modtpy.api import ModT
 
 printer = Blueprint('printer', __name__)
 
