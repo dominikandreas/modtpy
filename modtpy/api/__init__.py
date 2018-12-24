@@ -12,8 +12,9 @@ BLOCKSIZE = 256 * 1024 * 1024
 
 if os.name == 'nt':
     is_64_bit = sys.maxsize > 2 ** 32
-    libusb_path = os.path.abspath(os.path.dirname(__file__) + "/libusb/%s/dll/" % ("MS64" if is_64_bit else "MS32"))
-    # print("using %s" % libusb_path)
+    libusb_path = os.path.abspath(os.path.dirname(__file__) + "/../libusb/%s/dll/" % ("MS64" if is_64_bit else "MS32"))
+    print("using %s" % libusb_path)
+    assert os.path.isdir(libusb_path)
     os.environ['PATH'] = os.environ['PATH'] + os.pathsep + libusb_path
 
 

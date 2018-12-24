@@ -9,7 +9,6 @@ except ImportError as e:
 import logging
 
 from modtpy.api import ModT, Mode
-from modtpy.web import server
 
 
 def _ensure_connected(callback_function, required_mode=None):
@@ -59,6 +58,7 @@ def cli_root(debug):
 @cli_root.command()
 @click.option('--port', default=5000, help='Port the server should be running on.')
 def web_server(port):
+    from modtpy.web import server
     server.run(port=port)
 
 
@@ -97,8 +97,8 @@ def enter_dfu(modt):
 
 @cli_root.command()
 @ensure_connected(Mode.operate)
-def status():
-    loop_print_status(ModT())
+def status(modt):
+    loop_print_status(modt)
 
 
 @cli_root.command()
