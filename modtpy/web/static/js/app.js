@@ -15,7 +15,7 @@ const getStatus = () => {
 };
 
 const setStatus = status => {
-  $("#printer-status").text(status.status.state);
+  $("#printer-status").text(status.status.status.state);
 };
 
 const pollStatus = () => {
