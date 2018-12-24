@@ -53,9 +53,10 @@ setup(
     packages=['modtpy', 'modtpy.cli'],
     platforms=['linux', ],
     install_requires=[
-        'pyusb',
-        'click',  # optional
-        'tqdm',
+        'pyusb',  # for usb access, requires libusb
+        'click',  # for cli
+        'tqdm',  # for progress bars
+        'flask'  # for webserver
     ],
     entry_points={
         'console_scripts': ['modtpy=modtpy.cli:cli_root'],
