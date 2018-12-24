@@ -154,6 +154,18 @@ class ModT:
         self.dev.write(2, '{"transport":{"attrs":["request","twoway"],"id":11},'
                           '"data":{"command":{"idx":51,"name":"unload_initiate"}}};')
 
+    @staticmethod
+    def format_status_msg(msg):
+        status, job = msg.get("status", {}), msg.get("job", {})
+        state = status.get("state", "?")
+        for key, value in STATUS_STRINGS.items():
+            state = state.replace(key, value)
+
+        return (" ".join(map(str,
+                             ["State: " + state, "| extruder temp:", status.get("extruder_temperature", "?"), "°C / ",
+                              status.get("extruder_target_temperature", "?"), "°C ",
+                              "| Job: line number:", job.get("current_line_number", "?")])))
+
     @ensure_connected(Mode.operate)
     def get_status(self, str_format=False):
         self.dev.write(4, '{"metadata":{"version":1,"type":"status"}}')
@@ -170,15 +182,7 @@ class ModT:
         if not str_format:
             return msg
 
-        status, job = msg.get("status", {}), msg.get("job", {})
-        state = status.get("state")
-        for key, value in STATUS_STRINGS.items():
-            state = state.replace(key, value)
-
-        return (" ".join(map(str,
-                             ["State: " + state, "| extruder temp:", status.get("extruder_temperature"), "°C / ",
-                              status.get("extruder_target_temperature"), "°C ",
-                              "| Job: line number:", job.get("current_line_number")])))
+        return self.format_status_msg(msg)
 
     @ensure_connected(Mode.operate)
     def read_modt(self, ep):
@@ -271,17 +275,14 @@ class ModT:
                 pbar.update(current_line_number - pbar.last_line)
                 pbar.last_line = current_line_number
 
+            status, job = msg.get("status", {}), msg.get("job", {})
             state = status.get("state", "?")
             for key, value in STATUS_STRINGS.items():
                 state = state.replace(key, value)
 
-            pbar.set_description(
-                " ".join(map(str,
-                             ["State: " + state, "| extruder temp:", status.get("extruder_temperature", "?"), "°C / ",
-                              status.get("extruder_target_temperature", "?"), "°C ",
-                              "| Job: line number:", job.get("current_line_number", "?")])))
+            pbar.set_description(self.format_status_msg(msg))
 
-        print("Gcode sent. executing loop and query mod-t status every 2 seconds")
+        print("\nGcode sent. executing loop and query mod-t status every 2 seconds")
         while True:
             try:
                 print_progress(self.get_status(str_format=False))
