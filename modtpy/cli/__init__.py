@@ -7,6 +7,7 @@ except ImportError as e:
     raise e
 
 import logging
+
 from modtpy.api import ModT, Mode
 from modtpy.web import server
 
@@ -54,10 +55,12 @@ def cli_root(debug):
         datefmt='%Y-%m-%d %H:%M:%S',
     )
 
+
 @cli_root.command()
 @click.option('--port', default=5000, help='Port the server should be running on.')
 def web_server(port):
     server.run(port=port)
+
 
 @cli_root.command()
 @click.argument("gcode_path", type=click.Path(file_okay=True, dir_okay=False, readable=True))
