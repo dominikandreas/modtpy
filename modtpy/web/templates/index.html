@@ -7,6 +7,11 @@
     <link
       rel="stylesheet"
       type="text/css"
+      href="{{ url_for('static', filename='css/fontawesome.min.css') }}"
+    />
+    <link
+      rel="stylesheet"
+      type="text/css"
       href="{{ url_for('static', filename='css/app.css') }}"
     />
     <script
@@ -24,8 +29,29 @@
       <article>
         <header><h3>Status</h3></header>
         <div class="article-content">
-          <p id="printer-mode"></p>
-          <p id="printer-status"></p>
+          <p>
+            <i class="fas fa-fw fa-eye modtpy-mode-connected"></i
+            ><i class="fas fa-fw fa-eye-slash modtpy-mode-disconnected"></i
+            >&nbsp;<span class="modtpy-mode"></span>
+          </p>
+          <div class="modtpy-mode-connected">
+            <p>
+              <i class="fas fa-fw fa-dice-d6"></i>&nbsp;<span
+                class="modtpy-status"
+              ></span>
+            </p>
+
+            <i class="fas fa-fw fa-thermometer-empty modtpy-status-temp-0"></i
+            ><i
+              class="fas fa-fw fa-thermometer-quarter modtpy-status-temp-1"
+            ></i
+            ><i class="fas fa-fw fa-thermometer-half modtpy-status-temp-2"></i
+            ><i
+              class="fas fa-fw fa-thermometer-three-quarters modtpy-status-temp-3"
+            ></i
+            ><i class="fas fa-fw fa-thermometer-full modtpy-status-temp-4"></i
+            >&nbsp;<span class="modtpy-status-temp"></span>
+          </div>
         </div>
       </article>
 

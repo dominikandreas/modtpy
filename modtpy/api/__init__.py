@@ -159,37 +159,17 @@ class ModT:
         self.dev.write(2, '{"transport":{"attrs":["request","twoway"],"id":11},'
                           '"data":{"command":{"idx":51,"name":"unload_initiate"}}};')
 
-    @staticmethod
-    def format_status_msg(msg):
-        status, job = msg.get("status", {}), msg.get("job", {})
-        state = status.get("state", "?")
-        for key, value in STATUS_STRINGS.items():
-            state = state.replace(key, value)
-
-        return (" ".join(map(str,
-                             ["State: " + state, "| extruder temp:", status.get("extruder_temperature", "?"), "°C / ",
-                              status.get("extruder_target_temperature", "?"), "°C ",
-                              "| Job: line number:", job.get("current_line_number", "?")])))
-
-    def get_status(self, str_format=False):
+    def get_status(self):
         if self.mode is Mode.DISCONNECTED or self.mode is Mode.DFU:
             return {}
-        
         self.dev.write(4, '{"metadata":{"version":1,"type":"status"}}')
         msg = self.read_modt(0x83)
 
         try:
             msg = json.loads(msg)
         except json.decoder.JSONDecodeError as e:
-            if str_format:
-                return msg
-            else:
-                raise PrinterError("Unable to decode printer message", payload="message: %s: JSONDecodeError: %s" % (msg, e))
-
-        if not str_format:
-            return msg
-
-        return self.format_status_msg(msg)
+            raise PrinterError("Unable to decode printer message", payload="message: %s: JSONDecodeError: %s" % (msg, e))
+        return msg
 
     @ensure_connected(Mode.OPERATE)
     def read_modt(self, ep):

@@ -1,3 +1,4 @@
+/* ========= CSS Reset */
 html,
 body,
 p,
@@ -50,6 +51,7 @@ html {
   box-sizing: border-box;
   font-size: 16px;
   font-family: Verdana, sans-serif;
+  color: #333;
 }
 
 *,
@@ -104,16 +106,29 @@ h6 {
   font-size: 1rem;
 }
 
+/* ========= modtpy */
+.modtpy-mode-connected {
+  display: none;
+}
+
+.modtpy-mode-disconnected {
+  display: inline;
+}
+
+.modtpy-mode {
+  text-transform: capitalize;
+}
+
+/* ========= General Layout */
 #header {
   background-color: #ed1d87;
   color: #fff;
-  padding: 2rem 3rem;
-  margin-bottom: 2rem;
+  padding: 1rem 2rem;
+  margin-bottom: 1rem;
 }
 
 #footer {
-  background-color: #ed1d87;
-  color: #fff;
+  border-top: 1px solid #ed1d87;
   padding: 1rem 3rem;
 }
 
@@ -142,7 +157,11 @@ button {
   font-family: inherit;
   border: 0;
   padding: 0.25rem 0.5rem;
+  margin: 0.25rem;
   background-color: #ed1d87;
   border-radius: 0.25rem;
   color: #fff;
 }
+
+
+capitalize
