@@ -7,6 +7,8 @@ import usb.util
 import tqdm
 from zlib import adler32
 from subprocess import getoutput
+from enum import Enum
+from modtpy.api.errors import PrinterError
 
 BLOCKSIZE = 256 * 1024 * 1024
 
@@ -53,21 +55,20 @@ STATUS_STRINGS = dict(STATE_LOADFIL_HEATING="Load filament: heating",
                       STATE_MECH_READY="Print finished")
 
 
-class Mode:
-    dfu, operate, disconnected = 0, 1, 2
+class Mode(Enum):
+    DISCONNECTED = 1
+    DFU = 2
+    OPERATE = 3
 
+    def __str__(self):
+        return str(self.name)
 
 def _ensure_connected(callback_function, required_mode=None):
     def wrapper(self, *args, **kwargs):
-        if not self.is_connected():
-            raise RuntimeError("Mod-T is not connected")
-        if required_mode is not None and self.mode != required_mode:
-            if self.mode == Mode.dfu:
-                print("printer is currently in dfu mode. you can put it back into operating mode by restarting it")
-                exit()
-            elif self.mode == Mode.operate:
-                self.enter_dfu()
-
+        if self.mode is Mode.DISCONNECTED:
+            raise PrinterError("Mod-T is not connected")
+        if not self.has_correct_mode(required_mode):
+            raise PrinterError("Mod-T id in wrong mode")
         return callback_function(self, *args, **kwargs)
 
     return wrapper
@@ -82,7 +83,6 @@ def ensure_connected(required_mode_or_function=None):
             return _ensure_connected(f, required_mode=required_mode_or_function)
 
         return __wrapper__
-
 
 class ModT:
     dev_id_operate = 0x0002
@@ -115,18 +115,22 @@ class ModT:
         return (usb.core.find(idVendor=ModT.dev_vendor_id, idProduct=ModT.dev_id_operate) or
                 usb.core.find(idVendor=ModT.dev_vendor_id, idProduct=ModT.dev_id_dfu))
 
+    def has_correct_mode(self, required_mode=None):
+        return required_mode == None or self.mode == required_mode
+
     @property
     def mode(self):
-        if usb.core.find(idVendor=ModT.dev_vendor_id, idProduct=ModT.dev_id_operate):
-            return Mode.operate
+        if not self.is_connected():
+            return Mode.DISCONNECTED
+        elif usb.core.find(idVendor=ModT.dev_vendor_id, idProduct=ModT.dev_id_operate):
+            return Mode.OPERATE
         elif usb.core.find(idVendor=ModT.dev_vendor_id, idProduct=ModT.dev_id_dfu):
-            return Mode.dfu
-        else:
-            return Mode.disconnected
+            return Mode.DFU
+        return Mode.DISCONNECTED
 
     @ensure_connected
     def enter_dfu(self, wait_for_dfu=True):
-        if self.mode is Mode.dfu:
+        if self.mode is Mode.DFU:
             return
 
         self.dev_id = self.dev_id_operate
@@ -143,13 +147,13 @@ class ModT:
         if wait_for_dfu:
             time.sleep(2)
 
-    @ensure_connected(Mode.operate)
+    @ensure_connected(Mode.OPERATE)
     def load_filament(self):
         self.dev.write(2, bytearray.fromhex('24690096ff'))
         self.dev.write(2, '{"transport":{"attrs":["request","twoway"],"id":9},'
                           '"data":{"command":{"idx":52,"name":"load_initiate"}}};')
 
-    @ensure_connected(Mode.operate)
+    @ensure_connected(Mode.OPERATE)
     def unload_filament(self):
         self.dev.write(2, bytearray.fromhex('246c0093ff'))
         self.dev.write(2, '{"transport":{"attrs":["request","twoway"],"id":11},'
@@ -167,8 +171,10 @@ class ModT:
                               status.get("extruder_target_temperature", "?"), "°C ",
                               "| Job: line number:", job.get("current_line_number", "?")])))
 
-    @ensure_connected(Mode.operate)
     def get_status(self, str_format=False):
+        if self.mode is Mode.DISCONNECTED or self.mode is Mode.DFU:
+            return {}
+        
         self.dev.write(4, '{"metadata":{"version":1,"type":"status"}}')
         msg = self.read_modt(0x83)
 
@@ -178,14 +184,14 @@ class ModT:
             if str_format:
                 return msg
             else:
-                raise RuntimeError("Unable to decode printer message: %s: JSONDecodeError: %s" % (msg, e))
+                raise PrinterError("Unable to decode printer message", payload="message: %s: JSONDecodeError: %s" % (msg, e))
 
         if not str_format:
             return msg
 
         return self.format_status_msg(msg)
 
-    @ensure_connected(Mode.operate)
+    @ensure_connected(Mode.OPERATE)
     def read_modt(self, ep):
         # Read pending data from MOD-t (bulk reads of 64 bytes)
         try:
@@ -198,7 +204,7 @@ class ModT:
         except usb.core.USBError as e:
             return json.dumps(dict(error=str(e)))
 
-    @ensure_connected(Mode.operate)
+    @ensure_connected(Mode.OPERATE)
     def send_gcode(self, gcode_path):
         if not os.path.isfile(gcode_path):
             raise RuntimeError(gcode_path + " not found")
@@ -292,7 +298,7 @@ class ModT:
                 import traceback
                 traceback.print_exc()
 
-    @ensure_connected(Mode.dfu)
+    @ensure_connected(Mode.DFU)
     def flash_firmware(self, firmware_path):
         firmware_path = os.path.abspath(firmware_path)
         assert os.path.isfile(firmware_path)

@@ -20,10 +20,10 @@ def _ensure_connected(callback_function, required_mode=None):
             time.sleep(.5)
             i = (i + 1) % 4
         if required_mode is not None and modt.mode != required_mode:
-            if modt.mode == Mode.dfu:
+            if modt.mode == Mode.DFU:
                 print("printer is currently in dfu mode. you can put it back into operating mode by restarting it")
                 exit()
-            elif modt.mode == Mode.operate:
+            elif modt.mode == Mode.OPERATE:
                 modt.enter_dfu()
 
         return callback_function(*args, modt=modt, **kwargs)
@@ -64,7 +64,7 @@ def web_server(port):
 
 @cli_root.command()
 @click.argument("gcode_path", type=click.Path(file_okay=True, dir_okay=False, readable=True))
-@ensure_connected(Mode.operate)
+@ensure_connected(Mode.OPERATE)
 def send_gcode(gcode_path, modt):
     modt.send_gcode(gcode_path)
 
@@ -76,14 +76,14 @@ def loop_print_status(modt):
 
 
 @cli_root.command()
-@ensure_connected(Mode.operate)
+@ensure_connected(Mode.OPERATE)
 def load_filament(modt):
     modt.load_filament()
     loop_print_status(modt)
 
 
 @cli_root.command()
-@ensure_connected(Mode.operate)
+@ensure_connected(Mode.OPERATE)
 def unload_filament(modt):
     modt.unload_filament()
     loop_print_status(modt)
@@ -96,14 +96,14 @@ def enter_dfu(modt):
 
 
 @cli_root.command()
-@ensure_connected(Mode.operate)
+@ensure_connected(Mode.OPERATE)
 def status(modt):
     loop_print_status(modt)
 
 
 @cli_root.command()
 @click.argument("firmware_path", type=click.Path(file_okay=True, dir_okay=False, readable=True))
-@ensure_connected(Mode.dfu)
+@ensure_connected(Mode.DFU)
 def flash_firmware(firmware_path, modt):
     modt.flash_firmware(firmware_path)
 

@@ -1,6 +1,4 @@
-from flask import Blueprint, jsonify, g
-from modtpy.web.errors import USBError
-import usb.core
+from flask import Blueprint, jsonify
 from modtpy.api import ModT
 
 printer = Blueprint('printer', __name__)
@@ -8,19 +6,15 @@ printer = Blueprint('printer', __name__)
 
 @printer.before_request
 def before_request():
-    if hasattr(printer, 'modt'):
-        return
-    try:
+    if not hasattr(printer, 'modt'):
         printer.modt = ModT()
-        assert printer.modt.is_connected()  # TODO: some better way to check connectivity upfront
-    except (ValueError, usb.core.NoBackendError) as error:
-        raise USBError(str(error), status_code=503)
     
 
 @printer.route('/status')
 def status():
+    mode = str(printer.modt.mode)
     status = printer.modt.get_status()
-    return jsonify(status=status)
+    return jsonify(mode=mode, status=status)
 
 
 @printer.route('/load-filament')

@@ -14,8 +14,13 @@ const getStatus = () => {
     });
 };
 
-const setStatus = status => {
-  $("#printer-status").text(status.status.status.state);
+const setStatus = payload => {
+  $("#printer-mode").text(payload.mode);
+  if (payload.status && payload.status.status) {
+    $("#printer-status").text(payload.status.status.state);
+  } else {
+    $("#printer-status").text("");
+  }
 };
 
 const pollStatus = () => {
