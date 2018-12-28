@@ -63,6 +63,7 @@ class Mode(Enum):
     def __str__(self):
         return str(self.name)
 
+
 def _ensure_connected(callback_function, required_mode=None):
     def wrapper(self, *args, **kwargs):
         if self.mode is Mode.DISCONNECTED:
@@ -83,6 +84,7 @@ def ensure_connected(required_mode_or_function=None):
             return _ensure_connected(f, required_mode=required_mode_or_function)
 
         return __wrapper__
+
 
 class ModT:
     dev_id_operate = 0x0002
@@ -116,7 +118,7 @@ class ModT:
                 usb.core.find(idVendor=ModT.dev_vendor_id, idProduct=ModT.dev_id_dfu))
 
     def has_correct_mode(self, required_mode=None):
-        return required_mode == None or self.mode == required_mode
+        return required_mode is None or self.mode == required_mode
 
     @property
     def mode(self):
@@ -159,17 +161,31 @@ class ModT:
         self.dev.write(2, '{"transport":{"attrs":["request","twoway"],"id":11},'
                           '"data":{"command":{"idx":51,"name":"unload_initiate"}}};')
 
-    def get_status(self):
-        if self.mode is Mode.DISCONNECTED or self.mode is Mode.DFU:
-            return {}
-        self.dev.write(4, '{"metadata":{"version":1,"type":"status"}}')
-        msg = self.read_modt(0x83)
+    @staticmethod
+    def format_status_msg(msg):
+        status, job = msg.get("status", {}), msg.get("job", {})
+        state = status.get("state", "?")
+        for key, value in STATUS_STRINGS.items():
+            state = state.replace(key, value)
 
-        try:
-            msg = json.loads(msg)
-        except json.decoder.JSONDecodeError as e:
-            raise PrinterError("Unable to decode printer message", payload="message: %s: JSONDecodeError: %s" % (msg, e))
-        return msg
+        return (" ".join(map(str,
+                             ["State: " + state, "| extruder temp:", status.get("extruder_temperature", "?"), "°C / ",
+                              status.get("extruder_target_temperature", "?"), "°C ",
+                              "| Job: line number:", job.get("current_line_number", "?")])))
+
+    def get_status(self, str_format=False):
+        if self.mode is Mode.DISCONNECTED or self.mode is Mode.DFU:
+            msg = {}
+        else:
+            self.dev.write(4, '{"metadata":{"version":1,"type":"status"}}')
+            msg = self.read_modt(0x83)
+
+            try:
+                msg = json.loads(msg)
+            except json.decoder.JSONDecodeError as e:
+                raise PrinterError("Unable to decode printer message",
+                                   payload="message: %s: JSONDecodeError: %s" % (msg, e))
+        return self.format_status_msg(msg) if str_format else msg
 
     @ensure_connected(Mode.OPERATE)
     def read_modt(self, ep):
