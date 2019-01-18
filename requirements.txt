@@ -1,3 +1,4 @@
+fasteners
 pyusb
 click
 tqdm
