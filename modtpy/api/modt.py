@@ -161,7 +161,7 @@ class ModT(USBDevice):
             print("returning cached status from t=%s" % self.last_status_time)
             return self.last_status
         else:
-            return super().get_status()
+            return super().get_status(device=device)
 
     @staticmethod
     def _read_response(device, endpoint):
