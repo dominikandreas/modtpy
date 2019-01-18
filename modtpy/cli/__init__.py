@@ -8,39 +8,8 @@ except ImportError as e:
 
 import logging
 
-from modtpy.api import ModT, Mode
-
-
-def _ensure_connected(callback_function, required_mode=None):
-    def wrapper(*args, **kwargs):
-        i = 0
-        modt = ModT()
-        while not modt.is_connected():
-            print("\rWaiting for Mod-T connection " + ("." * i), end=" ")
-            time.sleep(.5)
-            i = (i + 1) % 4
-        if required_mode is not None and modt.mode != required_mode:
-            if modt.mode == Mode.DFU:
-                print("printer is currently in dfu mode. you can put it back into operating mode by restarting it")
-                exit()
-            elif modt.mode == Mode.OPERATE:
-                modt.enter_dfu()
-
-        return callback_function(*args, modt=modt, **kwargs)
-    wrapper.__name__ = callback_function.__name__
-
-    return wrapper
-
-
-def ensure_connected(required_mode_or_function=None):
-    if callable(required_mode_or_function):
-        f = required_mode_or_function
-        return _ensure_connected(f)
-    else:
-        def __wrapper__(f):
-            return _ensure_connected(f, required_mode=required_mode_or_function)
-
-        return __wrapper__
+from modtpy.api.modt import ModT, Mode
+from modtpy.cli.tools import ensure_connected, get_user_choice
 
 
 @click.group()
@@ -69,9 +38,9 @@ def send_gcode(gcode_path, modt):
     modt.send_gcode(gcode_path)
 
 
-def loop_print_status(modt):
+def loop_print_status(modt: ModT):
     while True:
-        logging.info(modt.get_status(str_format=True))
+        logging.info(modt.format_status_msg(modt.get_status()))
         time.sleep(.5)
 
 
@@ -84,7 +53,7 @@ def load_filament(modt):
 
 @cli_root.command()
 @ensure_connected(Mode.OPERATE)
-def unload_filament(modt):
+def unload_filament(modt: ModT):
     modt.unload_filament()
     loop_print_status(modt)
 
@@ -97,14 +66,18 @@ def enter_dfu(modt):
 
 @cli_root.command()
 @ensure_connected(Mode.OPERATE)
-def status(modt):
+def status(modt: ModT):
     loop_print_status(modt)
 
 
 @cli_root.command()
-@click.argument("firmware_path", type=click.Path(file_okay=True, dir_okay=False, readable=True))
+@click.option("-f", "--firmware_path", default=None, type=click.Path(file_okay=True, dir_okay=False, readable=True))
 @ensure_connected(Mode.DFU)
-def flash_firmware(firmware_path, modt):
+def flash_firmware(firmware_path, modt: ModT):
+    if firmware_path is None:
+        from modtpy.res import get_firmwares
+
+        firmware_path = get_user_choice(choices=get_firmwares(), prompt="Please select one of the available firmwares:")
     modt.flash_firmware(firmware_path)
 
 
