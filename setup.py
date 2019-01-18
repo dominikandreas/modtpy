@@ -2,11 +2,7 @@ import codecs
 import os
 import sys
 
-try:
-    from setuptools import setup
-except ImportError:
-    from distutils.core import setup
-
+from setuptools import setup, find_packages
 
 if len(sys.argv) <= 1:
     print("""
@@ -50,7 +46,8 @@ setup(
     ],
     keywords='home automation',
     include_package_data=True,
-    packages=['modtpy', 'modtpy.api', 'modtpy.cli', 'modtpy.res', 'modtpy.web'],
+    packages=['modtpy', 'modtpy.api', 'modtpy.cli', 'modtpy.res', 'modtpy.web',
+              'modtpy.web.main', 'modtpy.web.printer', 'modtpy.web.static', 'modtpy.web.templates'],
     platforms=['linux', 'windows'],
     install_requires=[
         'pyusb',  # for usb access, requires libusb

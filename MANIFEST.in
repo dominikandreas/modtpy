@@ -2,3 +2,8 @@ recursive-include modtpy/res/dfu_util *
 recursive-include modtpy/res/libusb/MS32/dll *.dll
 recursive-include modtpy/res/libusb/MS64/dll *.dll
 recursive-include modtpy/res/firmwares *.dfu
+recursive-include modtpy/web/static *
+recursive-include modtpy/web/static/css *
+recursive-include modtpy/web/static/js *
+recursive-include modtpy/web/static/webfonts *
+recursive-include modtpy/web/templates *
