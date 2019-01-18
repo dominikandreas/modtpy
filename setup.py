@@ -56,7 +56,7 @@ setup(
         'pyusb',  # for usb access, requires libusb
         'click',  # for cli
         'tqdm',  # for progress bars
-        'flask'  # for web-server
+        'flask',  # for web-server
         'fasteners'  # for file-based multi-process mutex (concurrent USB access)
     ],
     entry_points={
