@@ -131,7 +131,7 @@ class ModT(USBDevice):
         status, job = msg.get("status", {}), msg.get("job", {})
         state = status.get("state", self.mode)
         for key, value in STATUS_STRINGS.items():
-            state = state.replace(key, value)
+            state = str(state).replace(key, value)
 
         return (" | ".join(map(str, ["State: " + state,
                                      "extruder temp: %s°C / %s °C" % (status.get("extruder_temperature", "?"),
@@ -183,9 +183,20 @@ class ModT(USBDevice):
         except usb.core.USBError as e:
             return json.dumps(dict(error=str(e)))
 
+    def reset(self, wait_for_reboot=False):
+        with self.get_device() as dev:
+            self._send_command(dev, 'Reset_printer')
+
+        if wait_for_reboot:
+            time.sleep(3)
+
     def send_gcode(self, gcode_path):
         if not os.path.isfile(gcode_path):
             raise RuntimeError(gcode_path + " not found")
+
+        logging.info("resetting device to flush old jobs")
+        self.reset(wait_for_reboot=True)
+        logging.info("done")
 
         gcode_file_size = os.path.getsize(gcode_path)
 
@@ -243,7 +254,7 @@ class ModT(USBDevice):
                     end = start + 5120
                     block = gcode[start:end]
 
-                    if counter % 20 == 0:
+                    if counter > 0 and counter % 20 == 0:
                         self._read_response(dev, Endpoints.BASIC_READ)
 
                     dev.write(Endpoints.BASIC_WRITE, block)
@@ -275,7 +286,7 @@ class ModT(USBDevice):
         print("\nGcode sent. executing loop and query mod-t status every 2 seconds")
         while True:
             try:
-                print_progress(self.get_status().get("message"))
+                print_progress(self.get_status())
                 time.sleep(2)
             except Exception:
                 import traceback

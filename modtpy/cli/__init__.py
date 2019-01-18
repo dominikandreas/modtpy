@@ -38,6 +38,14 @@ def send_gcode(gcode_path, modt):
     modt.send_gcode(gcode_path)
 
 
+@cli_root.command()
+@ensure_connected(Mode.OPERATE)
+def reset(modt):
+    logging.info("resetting printer")
+    modt.reset()
+    logging.info("done")
+
+
 def loop_print_status(modt: ModT):
     while True:
         logging.info(modt.format_status_msg(modt.get_status()))
