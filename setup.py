@@ -50,7 +50,7 @@ setup(
     ],
     keywords='home automation',
     include_package_data=True,
-    packages=['modtpy', 'modtpy.cli'],
+    packages=['modtpy', 'modtpy.api', 'modtpy.cli', 'modtpy.res'],
     platforms=['linux', 'windows'],
     install_requires=[
         'pyusb',  # for usb access, requires libusb
