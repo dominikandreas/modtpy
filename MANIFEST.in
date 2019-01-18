@@ -1,1 +1,1 @@
-recursive-include modtpy/libusb *.dll
+recursive-include modtpy/res/*

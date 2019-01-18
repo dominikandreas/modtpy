@@ -51,12 +51,13 @@ setup(
     keywords='home automation',
     include_package_data=True,
     packages=['modtpy', 'modtpy.cli'],
-    platforms=['linux', ],
+    platforms=['linux', 'windows'],
     install_requires=[
         'pyusb',  # for usb access, requires libusb
         'click',  # for cli
         'tqdm',  # for progress bars
-        'flask'  # for webserver
+        'flask'  # for web-server
+        'fasteners'  # for file-based multi-process mutex (concurrent USB access)
     ],
     entry_points={
         'console_scripts': ['modtpy=modtpy.cli:cli_root'],
