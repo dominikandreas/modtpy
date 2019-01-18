@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify
-from modtpy.api import ModT
+from modtpy.api.modt import ModT, Mode
 
 printer = Blueprint('printer', __name__)
 
@@ -8,11 +8,12 @@ printer = Blueprint('printer', __name__)
 def before_request():
     if not hasattr(printer, 'modt'):
         printer.modt = ModT()
+        printer.modt.run_status_loop()
     
 
 @printer.route('/status')
 def status():
-    mode = str(printer.modt.mode)
+    mode = Mode.to_string(printer.modt.mode)
     status = printer.modt.get_status()
     return jsonify(mode=mode, status=status)
 
