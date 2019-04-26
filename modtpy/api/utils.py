@@ -11,7 +11,7 @@ def parse_json(msg, handle_exception=True):
         if handle_exception:
             logging.exception("Exception occurred during json parsing")
             tb = traceback.format_exc()
-            json_res["_exc"] = msg(e) + "\n" + msg(tb)
+            json_res["_exc"] = str(e) + "\n" + msg(tb)
         else:
             raise e
     return json_res
