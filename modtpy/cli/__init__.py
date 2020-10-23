@@ -1,10 +1,13 @@
+import os
+import sys
 import time
+from tqdm.auto import tqdm
 
 try:
     import click
 except ImportError as e:
-    print("please install click: e.g. pip3 install -U click")
-    raise e
+    os.system(sys.executable + " -m pip install --user click")
+    import click
 
 import logging
 
@@ -26,9 +29,10 @@ def cli_root(debug):
 
 @cli_root.command()
 @click.option('--port', default=5000, help='Port the server should be running on.')
-def web_server(port):
+@click.option('--host', default="127.0.0.1", help="The host which the server is exposed to")
+def web_server(port, host):
     from modtpy.web import server
-    server.run(port=port)
+    server.run(port=port, host=host)
 
 
 @cli_root.command()
@@ -46,9 +50,30 @@ def reset(modt):
     logging.info("done")
 
 
-def loop_print_status(modt: ModT):
+def loop_print_status(modt: ModT, tqdm_progress=False):
+    # remove the first two status messages, they are usually garbage and can't be decoded
+    for i in range(2):
+        modt.format_status_msg(modt.get_status())
+
+    if tqdm_progress:
+        bar = tqdm(total=100)
+
+    last_progress = 0
     while True:
-        logging.info(modt.format_status_msg(modt.get_status()))
+        status = modt.get_status()
+        status_message = modt.format_status_msg(status, progress=not tqdm_progress)
+        progress = status['job']['progress']
+        if tqdm_progress and progress is not None:
+            try:
+                progress = int(progress)
+            except ValueError:
+                progress = last_progress
+            if tqdm_progress:
+                bar.update(progress - last_progress)
+                last_progress = progress
+                bar.set_postfix_str(status_message)
+        else:
+            logging.info(status_message)
         time.sleep(.5)
 
 
@@ -76,6 +101,12 @@ def enter_dfu(modt):
 @ensure_connected(Mode.OPERATE)
 def status(modt: ModT):
     loop_print_status(modt)
+
+
+@cli_root.command()
+@ensure_connected(Mode.OPERATE)
+def print_status(modt: ModT):
+    loop_print_status(modt, tqdm_progress=True)
 
 
 @cli_root.command()

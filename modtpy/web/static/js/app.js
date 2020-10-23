@@ -51,6 +51,7 @@ const setStatus = status => {
     status.status.extruder_temperature,
     status.status.extruder_target_temperature
   );
+  setProgress(status.job.progress);
 };
 
 const setTemperature = (current, max) => {
@@ -65,7 +66,20 @@ const setTemperature = (current, max) => {
   $(".modtpy-status-temp-" + scale).show();
 };
 
+const setProgress = progress => {
+  try{
+     parseInt(progress);
+     let el = $(".modtpy-status-progress-display");
+     el.text(progress + "%");
+     el.show()
+     $(".modtpy-status-progress").show();
+  } catch (e) {
+    $(".modtpy-status-progress").hide();
+    $(".modtpy-status-progress-display").hide()
+  }
+}
 const setMode = mode => {
+  mode = mode.toUpperCase();
   if (mode === "DISCONNECTED" || mode === "DFU") {
     $(".modtpy-mode-connected").hide();
     $(".modtpy-mode-disconnected").show();

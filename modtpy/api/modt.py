@@ -127,33 +127,25 @@ class ModT(USBDevice):
         with self.get_device() as dev:
             self._send_command(dev, "unload_initiate")
 
-    def format_status_msg(self, msg: dict):
+    def format_status_msg(self, msg: dict, progress=True):
         status, job = msg.get("status", {}), msg.get("job", {})
         state = status.get("state", self.mode)
         for key, value in STATUS_STRINGS.items():
             state = str(state).replace(key, value)
 
-        return (" | ".join(map(str, ["State: " + state,
-                                     "extruder temp: %s°C / %s °C" % (status.get("extruder_temperature", "?"),
-                                                                      status.get("extruder_target_temperature", "?")),
-                                     "Job: line number: %s" % job.get("current_line_number", "?"),
+        return (" | ".join(map(str, [state,
+                                     "Temp: %s°C / %s °C" % (status.get("extruder_temperature", "?"),
+                                                             status.get("extruder_target_temperature", "?")),
+                                     *(["Progress: %s%%" % job.get('progress', "?")] if progress else [])
                                      ])))
 
-    def _get_status(self, device, handle_exception=True):
+    def _get_status(self, device, handle_exception=True, as_dict=True):
         device.write(Endpoints.BASIC_WRITE, '{"metadata":{"version":1,"type":"status"}}')
         msg = self._read_response(device, Endpoints.BASIC_READ)
-        try:
-            msg = api.utils.parse_json(msg, handle_exception=False)
-        except json.decoder.JSONDecodeError:
-            try:
-                # try to compensate when json message is missing the part leading up to the name (firmware bug?).
-                msg = '{"printer":{"model_name' + ('"' if not msg.startswith('"') else '') + msg
-                msg = api.utils.parse_json(msg, handle_exception=handle_exception)
-            except json.decoder.JSONDecodeError as e:
-                raise api.errors.PrinterError("Unable to decode printer message ",
-                                              payload="message: %s: JSONDecodeError: %s" % (msg, str(e)))
-
-        msg["msg_str_format"] = self.format_status_msg(msg)
+        msg = api.utils.parse_json(msg)
+        if as_dict:
+            msg = msg.to_dict()
+            msg["msg_str_format"] = self.format_status_msg(msg)
         return msg
 
     def get_status(self, device=None):
