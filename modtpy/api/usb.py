@@ -25,7 +25,7 @@ class USBDevice:
     dev_vendor_id = 0x000
 
     @contextmanager
-    def lock(self, timeout=0.2):
+    def lock(self, timeout=0.5):
         process_lock = fasteners.InterProcessLock(MUTEX_PATH)
         proc_acquired = process_lock.acquire(timeout=timeout)
         thread_acquired = _lock.acquire(timeout=timeout)

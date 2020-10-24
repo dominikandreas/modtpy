@@ -40,6 +40,7 @@ def web_server(port, host):
 @ensure_connected(Mode.OPERATE)
 def send_gcode(gcode_path, modt):
     modt.send_gcode(gcode_path)
+    loop_print_status(modt, tqdm_progress=True)
 
 
 @cli_root.command()

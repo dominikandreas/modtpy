@@ -2,6 +2,10 @@ import os
 import sys
 import time
 import json
+from io import StringIO
+from os import PathLike
+from typing import Union, BinaryIO
+
 import usb.core
 import usb.util
 import tqdm
@@ -24,19 +28,12 @@ if os.name == 'nt':
     os.environ['PATH'] = os.pathsep.join([os.environ['PATH'], lib_usb_dir, dfu_util_dir])
 
 
-def adler32_checksum(file_name):
+def adler32_checksum(data: bytes):
     # Adler32 checksum function based on https://gist.github.com/kofemann/2303046
     # For some reason, mod-t uses 0, not 1 as the basis of the adler32 sum
-    adler_sum = 0
-    f = open(file_name, "rb")
-    while True:
-        data = f.read(BLOCKSIZE)
-        if not data:
-            break
-        adler_sum = adler32(data, adler_sum)
-        if adler_sum < 0:
-            adler_sum += 2 ** 32
-    f.close()
+    adler_sum = adler32(data, 0)
+    if adler_sum < 0:
+        adler_sum += 2 ** 32
     return adler_sum
 
 
@@ -75,7 +72,7 @@ class ModT(USBDevice):
         self.current_gcode_len = None
         self.last_status = dict(status=dict(state="disconnected"))
         self.last_status_time = 0
-        self.status_poll_interval = 0.2
+        self.status_poll_interval = .5
 
     def run_status_loop(self, daemon=False):
         if daemon:
@@ -182,20 +179,31 @@ class ModT(USBDevice):
         if wait_for_reboot:
             time.sleep(3)
 
-    def send_gcode(self, gcode_path):
-        if not os.path.isfile(gcode_path):
-            raise RuntimeError(gcode_path + " not found")
+    def send_gcode(self, gcode_file: Union[PathLike, BinaryIO], logger=None):
+        if logger is None:
+            logger = logging.getLogger()
 
-        logging.info("resetting device to flush old jobs")
+        logger.info("resetting device to flush old jobs")
         self.reset(wait_for_reboot=True)
-        logging.info("done")
+        logger.info("done")
 
-        gcode_file_size = os.path.getsize(gcode_path)
+        def update_progress(progress):
+            self.last_status.update(dict(state="STATE_FILE_RX", job=dict(progress=progress)))
+            self.last_status_time = time.time()
 
-        # Get the adler32 checksum of the gcode file
-        checksum = adler32_checksum(gcode_path)
-        with open(gcode_path, "rb") as f:
-            gcode = f.read()
+        update_progress(0)
+        if type(gcode_file) is str and os.path.isfile(gcode_file):
+            with open(gcode_file, "rb") as f:
+                gcode = f.read()
+        elif hasattr(gcode_file, "read"):
+            gcode = gcode_file.read()
+        else:
+            raise ValueError("Invalid gcode_file %s" % gcode_file)
+
+        checksum = adler32_checksum(gcode)
+        gcode_file_size = len(gcode)
+
+        update_progress(0)
 
         # The following came from a usb-dump and is probably not necessary
         # Some commands are human readable some are maybe checksums
@@ -225,24 +233,39 @@ class ModT(USBDevice):
         """
 
         with self.get_device(Mode.OPERATE) as dev:
-            logging.debug(self._exec_command(dev, "bio_get_version"))
-            logging.debug(self.format_status_msg(self.get_status(device=dev)))
-            logging.debug(self._exec_command(dev, "wifi_client_get_status", arguments=dict(interface_t=0)))
-            logging.debug(self._exec_command(dev, "bio_get_version"))
+            logger.debug(self._exec_command(dev, "bio_get_version"))
+            logger.debug(self.format_status_msg(self.get_status(device=dev)))
+            logger.debug(self._exec_command(dev, "wifi_client_get_status", arguments=dict(interface_t=0)))
+            logger.debug(self._exec_command(dev, "bio_get_version"))
             for i in range(2):
-                logging.debug(self.format_status_msg(self.get_status(device=dev)))
+                logger.debug(self.format_status_msg(self.get_status(device=dev)))
+                update_progress(0)
 
             # prepare printer for sending gcode
             dev.write(Endpoints.BASIC_WRITE,
                       '{"metadata":{"version":1,"type":"file_push"},"file_push":'
-                      '{"size":%i,"adler32":%i,"job_id":"","file":"%s"}}' % (gcode_file_size, checksum, gcode_path))
+                      '{"size":%i,"adler32":%i,"job_id":"","file":"%s"}}' % (gcode_file_size, checksum, gcode_file))
 
             # Write gcode in batches of 20 bulk writes, each 5120 bytes. Read mod-t status between these 20 bulk writes
             start = counter = 0
             total = len(gcode)
 
-            with tqdm.tqdm(total=len(gcode)) as pbar:
+            class TqdmToLogger(StringIO):
+                def __init__(self, logger):
+                    super(TqdmToLogger, self).__init__()
+                    self.logger, self.buf = logger, ''
+
+                def write(self, buf):
+                    self.buf = buf.strip('\r\n\t ')
+
+                def flush(self):
+                    self.logger.log(logging.INFO, self.buf)
+
+            tqdm_out = TqdmToLogger(logger)
+
+            with tqdm.tqdm(total=len(gcode), file=tqdm_out) as pbar:
                 while True:
+                    # set status time so that old (cached) status is returned
                     end = start + 5120
                     block = gcode[start:end]
 
@@ -253,36 +276,12 @@ class ModT(USBDevice):
 
                     counter += 1
                     start += 5120
+                    update_progress(progress=int(len(gcode) / start) * 100)
                     pbar.update(5120)
                     pbar.set_description("Sent bytes %i / %i" % (end, total))
                     if start > gcode_file_size:
                         break
-
-            pbar = tqdm.tqdm(total=len(gcode.split(b"\n")), unit="l")
-            pbar.last_line = 0
-
-        def print_progress(msg):
-            status, job = msg.get("status", {}), msg.get("job", {})
-            current_line_number = job.get("current_line_number")
-            if current_line_number is not None:
-                pbar.update(current_line_number - pbar.last_line)
-                pbar.last_line = current_line_number
-
-            status, job = msg.get("status", {}), msg.get("job", {})
-            state = status.get("state", "?")
-            for key, value in STATUS_STRINGS.items():
-                state = state.replace(key, value)
-
-            pbar.set_description(self.format_status_msg(msg))
-
-        print("\nGcode sent. executing loop and query mod-t status every 2 seconds")
-        while True:
-            try:
-                print_progress(self.get_status())
-                time.sleep(2)
-            except Exception:
-                import traceback
-                traceback.print_exc()
+        logger.info("upload complete")
 
     def flash_firmware(self, firmware_path, override_confirm=False):
         firmware_path = os.path.abspath(firmware_path)

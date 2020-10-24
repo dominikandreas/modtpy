@@ -163,5 +163,15 @@ button {
   color: #fff;
 }
 
-
-capitalize
+.logs {
+  background-color: #383532;
+  font-family: 'Consolas', 'Deja Vu Sans Mono', 'Bitstream Vera Sans Mono', monospace;
+  color: #ff6a64;
+  overflow-y: scroll;
+  height: 300px;
+  padding: 20px;
+  margin-right: 20px;
+  margin-left: 20px;
+  margin-top: 10px;
+  margin-bottom: 10px;
+}

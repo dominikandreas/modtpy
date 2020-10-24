@@ -1,5 +1,7 @@
 const handleError = error => {
-  $("#printer-status").text(error.message);
+  if (error !== undefined && error.message !== undefined) {
+    $("#printer-status").text(error.message);
+  }
 };
 
 const stateTypes = {
@@ -29,11 +31,28 @@ const getStatus = () => {
     .done(payload => {
       setMode(payload.mode);
       setStatus(payload.status);
+      setLogs(payload.logs);
     })
     .fail(payload => {
       handleError(payload.responseJSON);
     });
 };
+
+
+document.logged_messages = {};
+
+
+const setLogs = logs => {
+  let logs_div = $(".logs")[0];
+  logs.forEach(log => {
+    if (document.logged_messages[log.id] === undefined){
+      let el = document.createElement("p");
+      document.logged_messages[log.id] = 1
+      el.innerHTML = document.ansispan(log.message);
+      logs_div.appendChild(el);
+    }
+  })
+}
 
 const setStatus = status => {
   if (!status || !status.status) {
@@ -51,7 +70,9 @@ const setStatus = status => {
     status.status.extruder_temperature,
     status.status.extruder_target_temperature
   );
-  setProgress(status.job.progress);
+  if (status.job !== undefined) {
+    setProgress(status.job.progress);
+  }
 };
 
 const setTemperature = (current, max) => {
@@ -92,11 +113,62 @@ const setMode = mode => {
 
 const pollStatus = () => {
   getStatus();
-  setInterval(() => {
-    getStatus();
-  }, 3000);
+  setInterval(getStatus, 2000);
 };
+
+
+const loadFilament = () => {
+  $.getJSON({
+    url: "/printer/load-filament"
+  }).done(payload => {
+    setMode(payload.mode);
+    setStatus(payload.status);
+  }).fail(payload => {
+    handleError(payload.responseJSON);
+  });
+}
+
+const unloadFilament = () => {
+  $.getJSON({
+    url: "/printer/unload-filament"
+  }).done(payload => {
+    setMode(payload.mode);
+    setStatus(payload.status);
+  }).fail(payload => {
+    handleError(payload.responseJSON);
+  });
+}
+
+const uploadGcode = () => {
+  let choose_btn = $("#gcode_btn_file_choose")[0];
+
+  choose_btn.onchange = (event) =>{
+    let file = event.target.files[0]
+    let fd = new FormData();
+    fd.append('file', file);
+    $.ajax({
+        url: 'printer/upload-gcode',
+        type: 'post',
+        data: fd,
+        contentType: false,
+        processData: false,
+        success: function(response){
+            if(response != 0){
+               alert('file uploaded');
+            }
+            else{
+                alert('file not uploaded');
+            }
+        },
+    });
+  }
+
+  choose_btn.click();
+}
 
 $(() => {
   pollStatus();
+  $("#btn-load")[0].onclick = loadFilament;
+  $("#btn-unload")[0].onclick = unloadFilament;
+  $("#btn-gcode")[0].onclick = uploadGcode;
 });
