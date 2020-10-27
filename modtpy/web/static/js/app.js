@@ -44,14 +44,19 @@ document.logged_messages = {};
 
 const setLogs = logs => {
   let logs_div = $(".logs")[0];
+  let last_el = undefined;
   logs.forEach(log => {
     if (document.logged_messages[log.id] === undefined){
       let el = document.createElement("p");
       document.logged_messages[log.id] = 1
       el.innerHTML = document.ansispan(log.message);
       logs_div.appendChild(el);
+      last_el = el;
     }
   })
+  if (last_el !== undefined){
+    last_el.scrollIntoView()
+  }
 }
 
 const setStatus = status => {
@@ -65,11 +70,26 @@ const setStatus = status => {
     $(".modtpy-status-temp-4").hide();
     return;
   }
-  $(".modtpy-status").text(stateTypes[status.status.state]);
+  let statusMsg = stateTypes[status.status.state];
+  let printOptions = $("#print-options")[0];
+  let printerBtn = $("#btn-printer-button")[0];
+  printerBtn.style.display = "none";
+  if (statusMsg === "Job queued"){
+    printOptions.style.display = "inline";
+  } else if (statusMsg === "Printing"){
+    printerBtn.style.display = "inline";
+    printerBtn.innerText = "Pause Print";
+  } else if (statusMsg === "Paused"){
+    printerBtn.style.display = "inline";
+    printerBtn.innerText = "Resume Print";
+  }
+
+  $(".modtpy-status").text(statusMsg);
   setTemperature(
     status.status.extruder_temperature,
     status.status.extruder_target_temperature
   );
+
   if (status.job !== undefined) {
     setProgress(status.job.progress);
   }
@@ -99,6 +119,7 @@ const setProgress = progress => {
     $(".modtpy-status-progress-display").hide()
   }
 }
+
 const setMode = mode => {
   mode = mode.toUpperCase();
   if (mode === "DISCONNECTED" || mode === "DFU") {
@@ -139,36 +160,75 @@ const unloadFilament = () => {
   });
 }
 
-const uploadGcode = () => {
-  let choose_btn = $("#gcode_btn_file_choose")[0];
+const uploadFile = (file, shouldOptimize, onSuccess) => {
+  let fd = new FormData();
+  fd.append('file', file);
+  fd.append('optimize', !!shouldOptimize)
+  $(".modtpy-status").text("Uploading file...");
+  $.ajax({
+      url: 'printer/upload-gcode',
+      type: 'post',
+      data: fd,
+      contentType: false,
+      processData: false,
 
-  choose_btn.onchange = (event) =>{
-    let file = event.target.files[0]
-    let fd = new FormData();
-    fd.append('file', file);
-    $.ajax({
-        url: 'printer/upload-gcode',
-        type: 'post',
-        data: fd,
-        contentType: false,
-        processData: false,
-        success: function(response){
-            if(response != 0){
-               alert('file uploaded');
-            }
-            else{
-                alert('file not uploaded');
-            }
-        },
-    });
+      success: function(response){
+        $(".modtpy-status").text("Upload complete");
+        if (onSuccess !== undefined){
+          onSuccess(response);
+        }
+      },
+
+      error: function(request, status, error){
+        const msg = ("Error during file upload: " + (status ? status: "") + " " + (error ? error: ""))
+        $(".modtpy-status").text(msg);
+        console.log(msg);
+      },
+
+      complete: function(){
+        $("#upload-form")[0].reset();
+      }
+
+  });
+}
+
+const chooseFile = () => {
+  let chooseBtn = $("#gcode_btn_file_choose")[0];
+  let uploadBtn = $("#btn-start-print")[0];
+  let optionsDiv = $("#print-options")[0];
+  let fileDescr = $("#file-description")[0];
+
+  chooseBtn.onchange = (event) =>{
+
+    if (chooseBtn.files.length ===0 ) {
+      fileDescr.innerText = "";
+      return
+    }
+    optionsDiv.style.display = "block";
+
+    let file = chooseBtn.files[0];
+    fileDescr.innerText = file.name;
+
+    uploadBtn.onclick = () => {
+      let shouldOptimize = $("#checkbox-optimize-gcode")[0].checked;
+      uploadFile(file, shouldOptimize, () => {optionsDiv.style.display = "none";});
+    }
+
   }
 
-  choose_btn.click();
+  chooseBtn.click();
+}
+
+const pressButton = () => {
+  $.getJSON({
+    url: "/printer/press-button"
+  });
 }
 
 $(() => {
   pollStatus();
   $("#btn-load")[0].onclick = loadFilament;
   $("#btn-unload")[0].onclick = unloadFilament;
-  $("#btn-gcode")[0].onclick = uploadGcode;
+  $("#btn-gcode")[0].onclick = chooseFile;
+  $("#btn-printer-button")[0].onclick = pressButton;
 });

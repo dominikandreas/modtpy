@@ -63,16 +63,25 @@
         <header><h3>Actions</h3></header>
         <div class="article-content">
           <button id="btn-gcode">Upload GCODE</button>
+
+          <div class="article-content" id="print-options" style="display:none">
+            <br> &nbsp;
+            <span id="file-description"></span>
+            <input type="checkbox" id="checkbox-optimize-gcode">
+            <label for="checkbox-optimize-gcode"> optimize gcode </label>
+            <br><br>
+            <button id="btn-start-print"> Start print </button>
+          </div>
+
           <button id="btn-load">Load Filament</button>
           <button id="btn-unload">Unload Filament</button>
-          <button id="btn-dfu">Enter DFU</button>
-          <button id="btn-firmware">Flash Firmware</button>
+          <button id="btn-printer-button" style="display:none">Start or pause print</button>
         </div>
       </article>
     </section>
 
     <div style="display:none">
-        <form method="post" action="" enctype="multipart/form-data" id="myform">
+        <form method="post" action="" enctype="multipart/form-data" id="upload-form">
             <div >
                 <input type="file" id="gcode_btn_file_choose" name="file" />
                 <input type="button" class="button" value="Upload" id="but_upload">

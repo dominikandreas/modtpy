@@ -1,4 +1,18 @@
+import logging
 import re
+from io import StringIO
+
+
+class TqdmLogger(StringIO):
+    def __init__(self, logger):
+        super(TqdmLogger, self).__init__()
+        self.logger, self.buf = logger, ''
+
+    def write(self, buf):
+        self.buf = buf.strip('\r\n\t ')
+
+    def flush(self):
+        self.logger.log(logging.INFO, self.buf)
 
 
 class JsonRegexParser:

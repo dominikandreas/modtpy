@@ -1,5 +1,7 @@
 import json
 
+press_button_gcode = "S1 S123"
+
 
 command_indexes = {
         'bio_get_version': 0, 'bio_get_serial': 1,

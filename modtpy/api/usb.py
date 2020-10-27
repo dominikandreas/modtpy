@@ -51,7 +51,8 @@ class USBDevice:
                 dev.set_configuration()
                 yield dev
             finally:
-                dev.reset()
+                if dev is not None:
+                    dev.reset()
                 del dev
 
     @property

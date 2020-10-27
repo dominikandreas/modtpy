@@ -3,6 +3,8 @@ import time
 from pathlib import Path
 import traceback
 from flask import Blueprint, jsonify, request
+
+from modtpy.api.gcode_optimization import GcodeOptimizer
 from modtpy.api.modt import ModT, Mode
 import logging
 from queue import LifoQueue
@@ -93,10 +95,21 @@ def status():
 @handle_exception
 def upload_gcode():
     file = next(iter(request.files.values()))
+    should_optimize = request.values.get("optimize") == "true"
+
     extension = Path(file.filename).suffix
-    if extension != ".gcode":
-        raise RuntimeError("only gcode extensions supported")
+    if extension.lower() != ".gcode":
+        raise RuntimeError("only gcode extensions supported but got " + extension)
+
+    if should_optimize:
+        gcode = file.stream.read().decode("utf-8")
+        optimized = GcodeOptimizer().optimize_gcode(gcode, logger=root)
+        file.stream = BytesIO()
+        file.stream.write(optimized.encode())
+        file.stream.seek(0)
+
     modt.send_gcode(file.stream, logger=root)
+    modt.press_button()
     return status()
 
 

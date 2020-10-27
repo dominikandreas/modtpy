@@ -1,7 +1,11 @@
 import os
 import sys
 import time
+from pathlib import Path
+
 from tqdm.auto import tqdm
+
+from modtpy.api.gcode_optimization import GcodeOptimizer
 
 try:
     import click
@@ -41,6 +45,24 @@ def web_server(port, host):
 def send_gcode(gcode_path, modt):
     modt.send_gcode(gcode_path)
     loop_print_status(modt, tqdm_progress=True)
+
+
+@cli_root.command()
+@click.argument("gcode_path", type=click.Path(file_okay=True, dir_okay=False, readable=True))
+@click.argument("output_path", default=None, type=click.Path(file_okay=True, dir_okay=True, writable=True, exists=False))
+@click.option("-e", "error_threshold", type=click.FLOAT, default=0.15)
+def optimize_gcode(gcode_path, output_path, error_threshold):
+    assert gcode_path.endswith(".gcode"), "must provide a .gcode file but got " + Path(gcode_path).name
+    with open(gcode_path, "r") as f:
+        content = f.read()
+    optimized = GcodeOptimizer().optimize_gcode(content, error_threshold)
+    if output_path is None:
+        output_path = gcode_path.replace(".gcode", "_optimized.gcode")
+    if os.path.isdir(output_path):
+        output_path = output_path + "/" + Path(gcode_path).name
+    logging.info("writing result to " + output_path)
+    with open(output_path, "w") as f:
+        f.write(optimized)
 
 
 @cli_root.command()
@@ -108,6 +130,12 @@ def status(modt: ModT):
 @ensure_connected(Mode.OPERATE)
 def print_status(modt: ModT):
     loop_print_status(modt, tqdm_progress=True)
+
+
+@cli_root.command()
+@ensure_connected(Mode.OPERATE)
+def press_button(modt: ModT):
+    modt.press_button()
 
 
 @cli_root.command()

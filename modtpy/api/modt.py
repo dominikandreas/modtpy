@@ -16,6 +16,7 @@ import logging
 
 from modtpy import api
 from modtpy.api.usb import USBDevice, Mode
+from modtpy.api.utils import TqdmLogger
 
 from modtpy.res import lib_usb_dir, dfu_util_dir
 
@@ -179,6 +180,11 @@ class ModT(USBDevice):
         if wait_for_reboot:
             time.sleep(3)
 
+    def press_button(self):
+        with self.get_device() as dev:
+            self._send_command(dev, 'gcode_process_command',
+                               arguments=dict(command=[ord(c) for c in api.modt_commands.press_button_gcode] + [0]))
+
     def send_gcode(self, gcode_file: Union[PathLike, BinaryIO], logger=None):
         if logger is None:
             logger = logging.getLogger()
@@ -188,7 +194,7 @@ class ModT(USBDevice):
         logger.info("done")
 
         def update_progress(progress):
-            self.last_status.update(dict(state="STATE_FILE_RX", job=dict(progress=progress)))
+            self.last_status.update(dict(status=dict(state="STATE_FILE_RX"), job=dict(progress=progress)))
             self.last_status_time = time.time()
 
         update_progress(0)
@@ -250,18 +256,7 @@ class ModT(USBDevice):
             start = counter = 0
             total = len(gcode)
 
-            class TqdmToLogger(StringIO):
-                def __init__(self, logger):
-                    super(TqdmToLogger, self).__init__()
-                    self.logger, self.buf = logger, ''
-
-                def write(self, buf):
-                    self.buf = buf.strip('\r\n\t ')
-
-                def flush(self):
-                    self.logger.log(logging.INFO, self.buf)
-
-            tqdm_out = TqdmToLogger(logger)
+            tqdm_out = TqdmLogger(logger)
 
             with tqdm.tqdm(total=len(gcode), file=tqdm_out) as pbar:
                 while True:
@@ -276,12 +271,13 @@ class ModT(USBDevice):
 
                     counter += 1
                     start += 5120
-                    update_progress(progress=int(len(gcode) / start) * 100)
+                    update_progress(progress=int(start / len(gcode) * 100))
+
                     pbar.update(5120)
                     pbar.set_description("Sent bytes %i / %i" % (end, total))
                     if start > gcode_file_size:
                         break
-        logger.info("upload complete")
+            logger.info("upload complete")
 
     def flash_firmware(self, firmware_path, override_confirm=False):
         firmware_path = os.path.abspath(firmware_path)
